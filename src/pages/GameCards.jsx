@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { doc, onSnapshot, setDoc, deleteDoc, collection, query, where } from 'firebase/firestore'
+import { doc, onSnapshot, setDoc, deleteDoc, collection, query, where, getDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../lib/firebase.js'
 import { BINGO_ITEMS } from '../lib/items.js'
-import { checkBingo } from '../lib/game.js'
+import { checkStatus, checkLine, checkBingo } from '../lib/game.js'
 import Header from '../components/Header.jsx'
 import BottomNav from '../components/BottomNav.jsx'
 
@@ -14,11 +14,11 @@ export default function GameCards() {
   const [cards, setCards] = useState([])
   const [marks, setMarks] = useState({})
   const [current, setCurrent] = useState(0)
+  const winnersChecked = useRef(false)
 
   useEffect(() => {
     if (!userId) return navigate('/')
 
-    // listen to user (to detect role/partner)
     const unsubUser = onSnapshot(doc(db, 'users', userId), snap => {
       if (!snap.exists() || snap.data().status !== 'approved') {
         localStorage.clear()
@@ -26,7 +26,6 @@ export default function GameCards() {
       }
     })
 
-    // listen all marks
     const unsubMarks = onSnapshot(collection(db, 'marks'), snap => {
       const obj = {}
       snap.forEach(d => { obj[d.id] = d.data() })
@@ -38,7 +37,6 @@ export default function GameCards() {
 
   useEffect(() => {
     if (!userId) return
-    // load cards belonging to user OR to partner (shared)
     const q = query(collection(db, 'cards'), where('ownerIds', 'array-contains', userId))
     const unsub = onSnapshot(q, snap => {
       const arr = snap.docs.map(d => ({ id: d.id, ...d.data() }))
@@ -47,6 +45,55 @@ export default function GameCards() {
     })
     return () => unsub()
   }, [userId])
+
+  // Check if user just won first line or first bingo
+  async function maybeRegisterWinner() {
+    if (cards.length === 0) return
+
+    for (const card of cards) {
+      const cellIds = card.cells
+      const markedIds = cellIds.filter(id => marks[String(id)])
+
+      const bingo = checkBingo(cellIds, markedIds)
+      if (bingo.has) {
+        // Try to claim first bingo
+        const ref = doc(db, 'winners', 'firstBingo')
+        const existing = await getDoc(ref)
+        if (!existing.exists()) {
+          await setDoc(ref, {
+            userId,
+            userName,
+            cardLabel: card.label || `Cartón ${card.idx + 1}`,
+            type: bingo.type,
+            at: Date.now(),
+          })
+        }
+      }
+
+      const line = checkLine(cellIds, markedIds)
+      if (line.has) {
+        // Try to claim first line
+        const ref = doc(db, 'winners', 'firstLine')
+        const existing = await getDoc(ref)
+        if (!existing.exists()) {
+          await setDoc(ref, {
+            userId,
+            userName,
+            cardLabel: card.label || `Cartón ${card.idx + 1}`,
+            type: line.type,
+            at: Date.now(),
+          })
+        }
+      }
+    }
+  }
+
+  // Run winner check whenever marks change
+  useEffect(() => {
+    if (Object.keys(marks).length === 0) return
+    if (cards.length === 0) return
+    maybeRegisterWinner()
+  }, [marks, cards])
 
   async function toggle(itemId) {
     const id = String(itemId)
@@ -80,13 +127,12 @@ export default function GameCards() {
   const card = cards[current]
   const cellIds = card.cells
   const markedIds = cellIds.filter(id => marks[String(id)])
-  const bingoState = checkBingo(cellIds, markedIds)
+  const status = checkStatus(cellIds, markedIds)
 
   return (
     <div className="min-h-screen flex flex-col pb-16">
       <Header num={card.label || (current + 1)} />
 
-      {/* Card switcher */}
       {cards.length > 1 && (
         <div className="flex justify-center gap-2 py-2 bg-darkBg">
           {cards.map((c, i) => (
@@ -104,9 +150,14 @@ export default function GameCards() {
       )}
 
       <div className="p-3 flex-1">
-        {bingoState.won && (
+        {status.state === 'bingo' && (
           <div className="bg-gold text-darkBg text-center font-bold tracking-widest uppercase py-2 rounded mb-2 text-sm">
-            ¡BINGO! {bingoState.type}
+            ¡BINGO! {status.type}
+          </div>
+        )}
+        {status.state === 'line' && (
+          <div className="bg-goldLight text-darkBg text-center font-bold tracking-widest uppercase py-2 rounded mb-2 text-sm">
+            ¡LÍNEA! {status.type}
           </div>
         )}
         <div className="grid grid-cols-3 gap-[2px] bg-gold p-[2px] rounded">
