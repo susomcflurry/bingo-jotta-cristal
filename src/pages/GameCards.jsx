@@ -6,14 +6,17 @@ import { BINGO_ITEMS } from '../lib/items.js'
 import { checkStatus, checkLine, checkBingo } from '../lib/game.js'
 import Header from '../components/Header.jsx'
 import BottomNav from '../components/BottomNav.jsx'
+import ConfirmModal from '../components/ConfirmModal.jsx'
 
 export default function GameCards() {
   const navigate = useNavigate()
   const userId = localStorage.getItem('userId')
   const userName = localStorage.getItem('userName')
+  const isAdmin = localStorage.getItem('adminOk') === '1'
   const [cards, setCards] = useState([])
   const [marks, setMarks] = useState({})
   const [current, setCurrent] = useState(0)
+  const [pending, setPending] = useState(null) // { itemId, action: 'mark' | 'unmark' }
   const winnersChecked = useRef(false)
 
   useEffect(() => {
@@ -95,9 +98,22 @@ export default function GameCards() {
     maybeRegisterWinner()
   }, [marks, cards])
 
-  async function toggle(itemId) {
+  function requestToggle(itemId) {
     const id = String(itemId)
     if (marks[id]) {
+      if (!isAdmin) return
+      setPending({ itemId, action: 'unmark' })
+    } else {
+      setPending({ itemId, action: 'mark' })
+    }
+  }
+
+  async function confirmPending() {
+    if (!pending) return
+    const { itemId, action } = pending
+    const id = String(itemId)
+    setPending(null)
+    if (action === 'unmark') {
       await deleteDoc(doc(db, 'marks', id))
       await setDoc(doc(collection(db, 'events')), {
         type: 'unmark', itemId, userId, userName, at: Date.now(),
@@ -167,7 +183,7 @@ export default function GameCards() {
             return (
               <button
                 key={i}
-                onClick={() => toggle(id)}
+                onClick={() => requestToggle(id)}
                 className={`min-h-[110px] flex flex-col items-center justify-center text-center p-2 transition relative ${
                   mark ? 'bg-cream2' : 'bg-cream'
                 }`}
@@ -191,6 +207,18 @@ export default function GameCards() {
         </div>
       </div>
       <BottomNav />
+      <ConfirmModal
+        open={!!pending}
+        title={pending?.action === 'unmark' ? 'Desmarcar acontecimiento' : 'Marcar acontecimiento'}
+        message={
+          pending
+            ? `¿Seguro que quieres ${pending.action === 'unmark' ? 'desmarcar' : 'marcar'} "${BINGO_ITEMS.find(it => String(it.id) === String(pending.itemId))?.text}"?`
+            : ''
+        }
+        confirmLabel={pending?.action === 'unmark' ? 'Desmarcar' : 'Marcar'}
+        onConfirm={confirmPending}
+        onCancel={() => setPending(null)}
+      />
     </div>
   )
 }

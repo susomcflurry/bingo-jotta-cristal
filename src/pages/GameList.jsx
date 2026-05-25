@@ -5,13 +5,16 @@ import { db } from '../lib/firebase.js'
 import { BINGO_ITEMS } from '../lib/items.js'
 import Header from '../components/Header.jsx'
 import BottomNav from '../components/BottomNav.jsx'
+import ConfirmModal from '../components/ConfirmModal.jsx'
 
 export default function GameList() {
   const navigate = useNavigate()
   const userId = localStorage.getItem('userId')
   const userName = localStorage.getItem('userName')
+  const isAdmin = localStorage.getItem('adminOk') === '1'
   const [marks, setMarks] = useState({}) // { itemId: { userId, userName, at } }
   const [events, setEvents] = useState([])
+  const [pending, setPending] = useState(null) // { itemId, action: 'mark' | 'unmark' }
 
   useEffect(() => {
     if (!userId) return navigate('/')
@@ -39,10 +42,22 @@ export default function GameList() {
     return () => { unsubUser(); unsubMarks(); unsubEvents() }
   }, [userId, navigate])
 
-  async function toggle(itemId) {
+  function requestToggle(itemId) {
     const id = String(itemId)
     if (marks[id]) {
-      // unmark
+      if (!isAdmin) return
+      setPending({ itemId, action: 'unmark' })
+    } else {
+      setPending({ itemId, action: 'mark' })
+    }
+  }
+
+  async function confirmPending() {
+    if (!pending) return
+    const { itemId, action } = pending
+    const id = String(itemId)
+    setPending(null)
+    if (action === 'unmark') {
       await deleteDoc(doc(db, 'marks', id))
       await setDoc(doc(collection(db, 'events')), {
         type: 'unmark',
@@ -88,7 +103,7 @@ export default function GameList() {
             return (
               <button
                 key={item.id}
-                onClick={() => toggle(item.id)}
+                onClick={() => requestToggle(item.id)}
                 className={`w-full text-left px-3 py-3 rounded-md border-2 transition flex items-center justify-between gap-2 ${
                   mark ? 'bg-cream2 border-gold' : 'bg-cream border-gold/40 hover:border-gold'
                 }`}
@@ -130,6 +145,18 @@ export default function GameList() {
         </div>
       </div>
       <BottomNav />
+      <ConfirmModal
+        open={!!pending}
+        title={pending?.action === 'unmark' ? 'Desmarcar acontecimiento' : 'Marcar acontecimiento'}
+        message={
+          pending
+            ? `¿Seguro que quieres ${pending.action === 'unmark' ? 'desmarcar' : 'marcar'} "${BINGO_ITEMS.find(it => String(it.id) === String(pending.itemId))?.text}"?`
+            : ''
+        }
+        confirmLabel={pending?.action === 'unmark' ? 'Desmarcar' : 'Marcar'}
+        onConfirm={confirmPending}
+        onCancel={() => setPending(null)}
+      />
     </div>
   )
 }
