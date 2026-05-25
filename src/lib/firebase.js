@@ -1,21 +1,21 @@
-// Firebase config — copia tus credenciales aquí desde la consola de Firebase
+// Firebase config — credenciales del proyecto bingo-jotta-cristal
 import { initializeApp } from 'firebase/app'
 import { getFirestore } from 'firebase/firestore'
 
-// ⚠️ REEMPLAZA ESTOS VALORES CON LOS DE TU PROYECTO FIREBASE
 const firebaseConfig = {
-  apiKey: "TU_API_KEY",
-  authDomain: "TU_PROYECTO.firebaseapp.com",
-  projectId: "TU_PROYECTO",
-  storageBucket: "TU_PROYECTO.appspot.com",
-  messagingSenderId: "0000000",
-  appId: "1:000:web:000"
+  apiKey: "AIzaSyBoU0XoYhQDjunLLj-i3SLJyRPBp1RHr7k",
+  authDomain: "bingo-jotta-cristal.firebaseapp.com",
+  projectId: "bingo-jotta-cristal",
+  storageBucket: "bingo-jotta-cristal.firebasestorage.app",
+  messagingSenderId: "977998671896",
+  appId: "1:977998671896:web:41898798d030b0217fd36d"
 }
 
-// ⚠️ CAMBIA ESTA CLAVE DE ADMIN — Solo tú deberías conocerla
-export const ADMIN_PIN = "BODA2026"
+// ⚠️ CAMBIA ESTOS PINs SI QUIERES
+// PIN del administrador — SOLO tú lo conoces
+export const ADMIN_PIN = "Gestion2020"
 
-// ⚠️ CAMBIA ESTE PIN GENERAL PARA INVITADOS
+// PIN general para invitados — lo das a todos los que vayan a jugar
 export const GUEST_PIN = "JOTTACRISTAL"
 
 const app = initializeApp(firebaseConfig)
