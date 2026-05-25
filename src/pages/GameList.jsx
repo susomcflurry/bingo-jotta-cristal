@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { doc, onSnapshot, setDoc, deleteDoc, collection, query, orderBy } from 'firebase/firestore'
 import { db } from '../lib/firebase.js'
-import { BINGO_ITEMS } from '../lib/items.js'
+import { useItems } from '../lib/useItems.js'
 import Header from '../components/Header.jsx'
 import BottomNav from '../components/BottomNav.jsx'
 import ConfirmModal from '../components/ConfirmModal.jsx'
@@ -12,6 +12,7 @@ export default function GameList() {
   const userId = localStorage.getItem('userId')
   const userName = localStorage.getItem('userName')
   const isAdmin = localStorage.getItem('adminOk') === '1'
+  const { items } = useItems()
   const [marks, setMarks] = useState({}) // { itemId: { userId, userName, at } }
   const [events, setEvents] = useState([])
   const [pending, setPending] = useState(null) // { itemId, action: 'mark' | 'unmark' }
@@ -98,7 +99,7 @@ export default function GameList() {
           Lista de Acontecimientos
         </div>
         <div className="space-y-2">
-          {BINGO_ITEMS.map(item => {
+          {items.map(item => {
             const mark = marks[String(item.id)]
             return (
               <button
@@ -129,7 +130,7 @@ export default function GameList() {
               <div className="text-xs text-gray-500 text-center py-2">Aún no hay eventos</div>
             )}
             {events.map(e => {
-              const item = BINGO_ITEMS.find(i => i.id === e.itemId)
+              const item = items.find(i => String(i.id) === String(e.itemId))
               return (
                 <div key={e.id} className="text-[11px] text-goldLight flex justify-between gap-2">
                   <span>
@@ -150,7 +151,7 @@ export default function GameList() {
         title={pending?.action === 'unmark' ? 'Desmarcar acontecimiento' : 'Marcar acontecimiento'}
         message={
           pending
-            ? `¿Seguro que quieres ${pending.action === 'unmark' ? 'desmarcar' : 'marcar'} "${BINGO_ITEMS.find(it => String(it.id) === String(pending.itemId))?.text}"?`
+            ? `¿Seguro que quieres ${pending.action === 'unmark' ? 'desmarcar' : 'marcar'} "${items.find(it => String(it.id) === String(pending.itemId))?.text}"?`
             : ''
         }
         confirmLabel={pending?.action === 'unmark' ? 'Desmarcar' : 'Marcar'}

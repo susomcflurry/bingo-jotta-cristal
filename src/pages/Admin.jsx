@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   collection, onSnapshot, doc, updateDoc, deleteDoc,
-  setDoc, getDocs, writeBatch, query, orderBy
+  setDoc, addDoc, getDocs, writeBatch, query, orderBy
 } from 'firebase/firestore'
 import { db, ADMIN_PIN } from '../lib/firebase.js'
-import { BINGO_ITEMS } from '../lib/items.js'
+import { DEFAULT_ITEMS } from '../lib/items.js'
+import { useItems } from '../lib/useItems.js'
 import { generateCard } from '../lib/game.js'
 import Header from '../components/Header.jsx'
 
@@ -25,6 +26,8 @@ export default function Admin() {
   const [selectedForPair, setSelectedForPair] = useState([])
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
+  const [newItemText, setNewItemText] = useState('')
+  const { items } = useItems()
 
   useEffect(() => {
     if (!auth) return
@@ -90,6 +93,11 @@ export default function Admin() {
   }
 
   async function generateAllCards() {
+    if (items.length < cellsPerCard) {
+      setMsg(`Necesitas al menos ${cellsPerCard} acontecimientos (tienes ${items.length})`)
+      setTimeout(() => setMsg(''), 4000)
+      return
+    }
     setBusy(true)
     setMsg('Generando cartones...')
     try {
@@ -125,7 +133,7 @@ export default function Admin() {
             ownerIds: g.ownerIds,
             label: g.label,
             idx,
-            cells: generateCard(seedBase + idx * 7919, cellsPerCard),
+            cells: generateCard(seedBase + idx * 7919, cellsPerCard, items),
             size: cellsPerCard,
             createdAt: Date.now(),
           })
@@ -142,6 +150,53 @@ export default function Admin() {
     } finally {
       setBusy(false)
       setTimeout(() => setMsg(''), 4000)
+    }
+  }
+
+  async function addItem(e) {
+    e?.preventDefault()
+    const text = newItemText.trim()
+    if (!text) return
+    setBusy(true)
+    try {
+      const nextOrder = items.length > 0 ? Math.max(...items.map(i => i.order ?? 0)) + 1 : 1
+      await addDoc(collection(db, 'items'), { text, order: nextOrder, createdAt: Date.now() })
+      setNewItemText('')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function deleteItem(id, text) {
+    if (!confirm(`¿Eliminar "${text}"? También se borrará su marca si está marcado. Los cartones ya generados que lo contengan mostrarán un hueco vacío.`)) return
+    setBusy(true)
+    try {
+      await deleteDoc(doc(db, 'items', id))
+      // Best-effort: si hay una marca con este id, bórrala
+      await deleteDoc(doc(db, 'marks', String(id))).catch(() => {})
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function seedDefaultItems() {
+    if (items.length > 0 && !confirm('Ya hay acontecimientos. ¿Añadir igualmente los 18 por defecto?')) return
+    setBusy(true)
+    setMsg('Cargando acontecimientos por defecto...')
+    try {
+      const batch = writeBatch(db)
+      const baseOrder = items.length > 0 ? Math.max(...items.map(i => i.order ?? 0)) : 0
+      DEFAULT_ITEMS.forEach((it, i) => {
+        const ref = doc(collection(db, 'items'))
+        batch.set(ref, { text: it.text, order: baseOrder + i + 1, createdAt: Date.now() })
+      })
+      await batch.commit()
+      setMsg(`Añadidos ${DEFAULT_ITEMS.length} acontecimientos`)
+    } catch (err) {
+      setMsg('Error: ' + err.message)
+    } finally {
+      setBusy(false)
+      setTimeout(() => setMsg(''), 3000)
     }
   }
 
@@ -235,6 +290,7 @@ export default function Admin() {
         {[
           ['users', `Usuarios (${pending.length}/${approved.length})`],
           ['partners', 'Parejas'],
+          ['items', `Acontecimientos (${items.length})`],
           ['cards', 'Cartones'],
           ['winners', '🏆 Ganadores'],
           ['events', 'Eventos'],
@@ -322,6 +378,66 @@ export default function Admin() {
             {selectedForPair.length === 2 && (
               <button onClick={makePair} className="btn-gold w-full">Emparejar seleccionados</button>
             )}
+          </>
+        )}
+
+        {/* ITEMS */}
+        {tab === 'items' && (
+          <>
+            <form onSubmit={addItem} className="bg-darkBg rounded-md p-4 mb-3">
+              <label className="text-xs text-gold uppercase tracking-widest block mb-2">Añadir acontecimiento</label>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  value={newItemText}
+                  onChange={e => setNewItemText(e.target.value)}
+                  placeholder="Texto del acontecimiento"
+                  className="flex-1 px-3 py-2 rounded bg-cream text-brown text-sm border-2 border-gold"
+                />
+                <button type="submit" disabled={busy || !newItemText.trim()} className="btn-gold px-4">
+                  +
+                </button>
+              </div>
+              {items.length === 0 && (
+                <button
+                  type="button"
+                  onClick={seedDefaultItems}
+                  disabled={busy}
+                  className="btn-outline w-full mt-2"
+                >
+                  Cargar 18 por defecto
+                </button>
+              )}
+              {items.length > 0 && (
+                <button
+                  type="button"
+                  onClick={seedDefaultItems}
+                  disabled={busy}
+                  className="text-[10px] text-goldDark underline w-full text-center mt-2"
+                >
+                  Añadir también los 18 por defecto
+                </button>
+              )}
+            </form>
+
+            <div className="space-y-2">
+              {items.length === 0 && (
+                <div className="text-xs text-gray-500 text-center py-4">
+                  Aún no hay acontecimientos. Añade alguno o carga los 18 por defecto.
+                </div>
+              )}
+              {items.map((it, i) => (
+                <div key={it.id} className="bg-cream border-2 border-gold/40 rounded p-3 flex items-center justify-between gap-2">
+                  <div className="flex-1">
+                    <div className="text-[10px] text-goldDark uppercase tracking-wide">#{i + 1}</div>
+                    <div className="text-sm text-brown">{it.text}</div>
+                  </div>
+                  <button onClick={() => deleteItem(it.id, it.text)} disabled={busy} className="text-red-700 text-xs underline whitespace-nowrap">
+                    Eliminar
+                  </button>
+                </div>
+              ))}
+            </div>
           </>
         )}
 
@@ -421,7 +537,7 @@ export default function Admin() {
           <>
             <h3 className="text-xs text-goldDark uppercase tracking-widest mb-2">Marcas actuales</h3>
             <div className="grid grid-cols-1 gap-1 mb-5">
-              {BINGO_ITEMS.map(item => {
+              {items.map(item => {
                 const m = marks[String(item.id)]
                 return (
                   <div key={item.id} className={`text-xs p-2 rounded border ${m ? 'bg-cream2 border-gold' : 'bg-cream border-gold/30'}`}>
@@ -436,7 +552,7 @@ export default function Admin() {
             <div className="bg-darkBg rounded p-3 text-[11px] space-y-1 max-h-96 overflow-y-auto">
               {events.length === 0 && <div className="text-gray-500 text-center">Sin eventos</div>}
               {events.map(e => {
-                const item = BINGO_ITEMS.find(i => i.id === e.itemId)
+                const item = items.find(i => String(i.id) === String(e.itemId))
                 return (
                   <div key={e.id} className="text-goldLight">
                     <span className="text-gold">{e.userName}</span>{' '}

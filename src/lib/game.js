@@ -1,4 +1,4 @@
-import { BINGO_ITEMS, CELLS_PER_CARD } from './items'
+import { CELLS_PER_CARD } from './items'
 
 const COLS = 3
 
@@ -13,9 +13,9 @@ function mulberry32(seed) {
   }
 }
 
-export function generateCard(seed, cellCount = CELLS_PER_CARD) {
+export function generateCard(seed, cellCount = CELLS_PER_CARD, items = []) {
   const rng = mulberry32(seed)
-  const pool = [...BINGO_ITEMS]
+  const pool = [...items]
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1))
     ;[pool[i], pool[j]] = [pool[j], pool[i]]

@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { doc, onSnapshot, setDoc, deleteDoc, collection, query, where, getDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../lib/firebase.js'
-import { BINGO_ITEMS } from '../lib/items.js'
+import { useItems } from '../lib/useItems.js'
 import { checkStatus, checkLine, checkBingo } from '../lib/game.js'
 import Header from '../components/Header.jsx'
 import BottomNav from '../components/BottomNav.jsx'
@@ -13,6 +13,7 @@ export default function GameCards() {
   const userId = localStorage.getItem('userId')
   const userName = localStorage.getItem('userName')
   const isAdmin = localStorage.getItem('adminOk') === '1'
+  const { items } = useItems()
   const [cards, setCards] = useState([])
   const [marks, setMarks] = useState({})
   const [current, setCurrent] = useState(0)
@@ -178,7 +179,7 @@ export default function GameCards() {
         )}
         <div className="grid grid-cols-3 gap-[2px] bg-gold p-[2px] rounded">
           {cellIds.map((id, i) => {
-            const item = BINGO_ITEMS.find(it => it.id === id)
+            const item = items.find(it => String(it.id) === String(id))
             const mark = marks[String(id)]
             return (
               <button
@@ -212,7 +213,7 @@ export default function GameCards() {
         title={pending?.action === 'unmark' ? 'Desmarcar acontecimiento' : 'Marcar acontecimiento'}
         message={
           pending
-            ? `¿Seguro que quieres ${pending.action === 'unmark' ? 'desmarcar' : 'marcar'} "${BINGO_ITEMS.find(it => String(it.id) === String(pending.itemId))?.text}"?`
+            ? `¿Seguro que quieres ${pending.action === 'unmark' ? 'desmarcar' : 'marcar'} "${items.find(it => String(it.id) === String(pending.itemId))?.text}"?`
             : ''
         }
         confirmLabel={pending?.action === 'unmark' ? 'Desmarcar' : 'Marcar'}

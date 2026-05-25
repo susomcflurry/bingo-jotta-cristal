@@ -1,4 +1,6 @@
-export const BINGO_ITEMS = [
+// Default seed for the Firestore `items` collection. The admin can replace
+// this with the "Cargar por defecto" button when items is empty.
+export const DEFAULT_ITEMS = [
   { id: 1,  text: "Cabreo Siames por beberse una copa" },
   { id: 2,  text: "Siames intentando morrearla en la fiesta" },
   { id: 3,  text: "Siamesa con migrañas / problemas de salud" },
