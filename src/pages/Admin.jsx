@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   collection, onSnapshot, doc, updateDoc, deleteDoc,
-  setDoc, addDoc, getDocs, writeBatch, query, orderBy
+  setDoc, getDocs, writeBatch, query, orderBy
 } from 'firebase/firestore'
 import { db, ADMIN_PIN } from '../lib/firebase.js'
 import { BINGO_ITEMS } from '../lib/items.js'
@@ -18,7 +18,8 @@ export default function Admin() {
   const [users, setUsers] = useState([])
   const [marks, setMarks] = useState({})
   const [events, setEvents] = useState([])
-  const [tab, setTab] = useState('users') // users | partners | cards | events
+  const [winners, setWinners] = useState({})
+  const [tab, setTab] = useState('users')
   const [cardsPerPlayer, setCardsPerPlayer] = useState(1)
   const [selectedForPair, setSelectedForPair] = useState([])
   const [busy, setBusy] = useState(false)
@@ -35,7 +36,10 @@ export default function Admin() {
     const u3 = onSnapshot(query(collection(db, 'events'), orderBy('at', 'desc')), snap => {
       setEvents(snap.docs.slice(0, 100).map(d => ({ id: d.id, ...d.data() })))
     })
-    return () => { u1(); u2(); u3() }
+    const u4 = onSnapshot(collection(db, 'winners'), snap => {
+      const obj = {}; snap.forEach(d => obj[d.id] = d.data()); setWinners(obj)
+    })
+    return () => { u1(); u2(); u3(); u4() }
   }, [auth])
 
   function handleLogin(e) {
@@ -59,9 +63,6 @@ export default function Admin() {
   async function rejectUser(id) {
     if (!confirm('¿Eliminar este usuario?')) return
     await deleteDoc(doc(db, 'users', id))
-  }
-  async function setRole(id, role) {
-    await updateDoc(doc(db, 'users', id), { role, partnerId: role === 'individual' ? null : undefined })
   }
 
   function togglePairSel(uid) {
@@ -91,15 +92,13 @@ export default function Admin() {
     setBusy(true)
     setMsg('Generando cartones...')
     try {
-      // Delete previous cards
       const prev = await getDocs(collection(db, 'cards'))
       const batchDel = writeBatch(db)
       prev.forEach(d => batchDel.delete(d.ref))
       await batchDel.commit()
 
-      // Build groups: each pareja counted once, each individual once
       const handled = new Set()
-      const groups = [] // { ownerIds: [], label: '' }
+      const groups = []
       const approved = users.filter(u => u.status === 'approved')
       for (const u of approved) {
         if (handled.has(u.id)) continue
@@ -115,7 +114,6 @@ export default function Admin() {
         handled.add(u.id)
       }
 
-      // Generate cardsPerPlayer cards per group
       const batchAdd = writeBatch(db)
       let seedBase = Math.floor(Math.random() * 1e9)
       let idx = 0
@@ -131,7 +129,6 @@ export default function Admin() {
           })
           idx++
         }
-        // update cardsCount for users
         for (const uid of g.ownerIds) {
           batchAdd.update(doc(db, 'users', uid), { cardsCount: cardsPerPlayer })
         }
@@ -147,18 +144,16 @@ export default function Admin() {
   }
 
   async function resetGame() {
-    if (!confirm('¿Seguro? Se borrarán parejas, cartones, marcas y eventos. Los USUARIOS se mantienen.')) return
+    if (!confirm('¿Seguro? Se borrarán parejas, cartones, marcas, eventos y ganadores. Los USUARIOS se mantienen.')) return
     setBusy(true)
     setMsg('Reseteando...')
     try {
-      // Delete cards, marks, events
-      for (const col of ['cards', 'marks', 'events']) {
+      for (const col of ['cards', 'marks', 'events', 'winners']) {
         const snap = await getDocs(collection(db, col))
         const batch = writeBatch(db)
         snap.forEach(d => batch.delete(d.ref))
         await batch.commit()
       }
-      // Reset users
       const us = await getDocs(collection(db, 'users'))
       const batch = writeBatch(db)
       us.forEach(d => {
@@ -177,16 +172,31 @@ export default function Admin() {
   }
 
   async function resetMarksOnly() {
-    if (!confirm('¿Borrar solo marcas y eventos (mantener parejas y cartones)?')) return
+    if (!confirm('¿Borrar solo marcas, eventos y ganadores (mantener parejas y cartones)?')) return
     setBusy(true)
     try {
-      for (const col of ['marks', 'events']) {
+      for (const col of ['marks', 'events', 'winners']) {
         const snap = await getDocs(collection(db, col))
         const batch = writeBatch(db)
         snap.forEach(d => batch.delete(d.ref))
         await batch.commit()
       }
-      setMsg('Marcas borradas')
+      setMsg('Marcas y ganadores borrados')
+    } finally {
+      setBusy(false)
+      setTimeout(() => setMsg(''), 2500)
+    }
+  }
+
+  async function resetWinnersOnly() {
+    if (!confirm('¿Borrar solo los ganadores? Útil si quieres reiniciar la carrera por la primera línea/bingo.')) return
+    setBusy(true)
+    try {
+      const snap = await getDocs(collection(db, 'winners'))
+      const batch = writeBatch(db)
+      snap.forEach(d => batch.delete(d.ref))
+      await batch.commit()
+      setMsg('Ganadores borrados')
     } finally {
       setBusy(false)
       setTimeout(() => setMsg(''), 2500)
@@ -219,18 +229,18 @@ export default function Admin() {
     <div className="min-h-screen flex flex-col">
       <Header subtitle="Panel Admin" />
 
-      {/* Tabs */}
-      <div className="flex bg-darkBg border-b-2 border-gold">
+      <div className="flex bg-darkBg border-b-2 border-gold overflow-x-auto">
         {[
           ['users', `Usuarios (${pending.length}/${approved.length})`],
           ['partners', 'Parejas'],
           ['cards', 'Cartones'],
+          ['winners', '🏆 Ganadores'],
           ['events', 'Eventos'],
         ].map(([k, label]) => (
           <button
             key={k}
             onClick={() => setTab(k)}
-            className={`flex-1 py-2 text-[11px] uppercase tracking-widest font-semibold ${
+            className={`flex-1 min-w-fit py-2 px-2 text-[10px] uppercase tracking-widest font-semibold whitespace-nowrap ${
               tab === k ? 'text-gold border-b-2 border-gold' : 'text-goldDark'
             }`}
           >{label}</button>
@@ -335,13 +345,59 @@ export default function Admin() {
 
             <div className="bg-darkBg rounded-md p-4">
               <h3 className="text-xs text-gold uppercase tracking-widest mb-3">Reseteo</h3>
+              <button onClick={resetWinnersOnly} disabled={busy} className="btn-outline w-full mb-2">
+                Borrar solo ganadores
+              </button>
               <button onClick={resetMarksOnly} disabled={busy} className="btn-outline w-full mb-2">
-                Borrar solo marcas
+                Borrar marcas, eventos y ganadores
               </button>
               <button onClick={resetGame} disabled={busy} className="w-full bg-red-700 text-white font-semibold uppercase tracking-wider text-sm px-5 py-3 rounded-md">
                 Reset total (mantiene usuarios)
               </button>
             </div>
+          </>
+        )}
+
+        {/* WINNERS */}
+        {tab === 'winners' && (
+          <>
+            <div className="bg-darkBg rounded-md p-5 mb-3 text-center">
+              <div className="text-xs text-goldDark uppercase tracking-widest mb-2">🥇 Primera Línea</div>
+              {winners.firstLine ? (
+                <>
+                  <div className="title-elegant text-2xl mb-1">{winners.firstLine.userName}</div>
+                  <div className="text-[11px] text-gold uppercase tracking-wide mb-1">
+                    {winners.firstLine.cardLabel} · {winners.firstLine.type}
+                  </div>
+                  <div className="text-[10px] text-goldDark">
+                    {new Date(winners.firstLine.at).toLocaleString('es-ES')}
+                  </div>
+                </>
+              ) : (
+                <div className="text-sm text-gray-500 italic">Aún sin ganador</div>
+              )}
+            </div>
+
+            <div className="bg-darkBg rounded-md p-5 text-center border-2 border-gold">
+              <div className="text-xs text-goldDark uppercase tracking-widest mb-2">🏆 Primer BINGO</div>
+              {winners.firstBingo ? (
+                <>
+                  <div className="title-elegant text-3xl mb-1">{winners.firstBingo.userName}</div>
+                  <div className="text-[11px] text-gold uppercase tracking-wide mb-1">
+                    {winners.firstBingo.cardLabel} · {winners.firstBingo.type}
+                  </div>
+                  <div className="text-[10px] text-goldDark">
+                    {new Date(winners.firstBingo.at).toLocaleString('es-ES')}
+                  </div>
+                </>
+              ) : (
+                <div className="text-sm text-gray-500 italic">Aún sin ganador</div>
+              )}
+            </div>
+
+            <p className="text-[10px] text-goldDark mt-4 text-center px-4">
+              Los ganadores se registran automáticamente cuando alguien completa por primera vez una línea o el cartón.
+            </p>
           </>
         )}
 
