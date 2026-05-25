@@ -1,5 +1,7 @@
 import { BINGO_ITEMS, CELLS_PER_CARD } from './items'
 
+const COLS = 3
+
 // Seeded random for reproducible cards
 function mulberry32(seed) {
   return function() {
@@ -11,27 +13,27 @@ function mulberry32(seed) {
   }
 }
 
-export function generateCard(seed) {
+export function generateCard(seed, cellCount = CELLS_PER_CARD) {
   const rng = mulberry32(seed)
   const pool = [...BINGO_ITEMS]
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1))
     ;[pool[i], pool[j]] = [pool[j], pool[i]]
   }
-  return pool.slice(0, CELLS_PER_CARD).map(item => item.id)
+  return pool.slice(0, cellCount).map(item => item.id)
 }
 
-// Check if any line (row or column) is complete on a 4x3 card
+// Check if any line (row or column) is complete. Layout: 3 columns, rows derived from length.
 export function checkLine(cellIds, markedIds) {
   const set = new Set(markedIds)
-  // Rows
-  for (let r = 0; r < 4; r++) {
-    const row = cellIds.slice(r * 3, r * 3 + 3)
+  const rows = Math.floor(cellIds.length / COLS)
+  for (let r = 0; r < rows; r++) {
+    const row = cellIds.slice(r * COLS, r * COLS + COLS)
     if (row.every(id => set.has(id))) return { has: true, type: `fila ${r+1}` }
   }
-  // Columns
-  for (let c = 0; c < 3; c++) {
-    const col = [cellIds[c], cellIds[c+3], cellIds[c+6], cellIds[c+9]]
+  for (let c = 0; c < COLS; c++) {
+    const col = []
+    for (let r = 0; r < rows; r++) col.push(cellIds[r * COLS + c])
     if (col.every(id => set.has(id))) return { has: true, type: `columna ${c+1}` }
   }
   return { has: false }

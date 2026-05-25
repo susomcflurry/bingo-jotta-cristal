@@ -21,6 +21,7 @@ export default function Admin() {
   const [winners, setWinners] = useState({})
   const [tab, setTab] = useState('users')
   const [cardsPerPlayer, setCardsPerPlayer] = useState(1)
+  const [cellsPerCard, setCellsPerCard] = useState(12) // 12 = 4x3, 9 = 3x3
   const [selectedForPair, setSelectedForPair] = useState([])
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
@@ -124,7 +125,8 @@ export default function Admin() {
             ownerIds: g.ownerIds,
             label: g.label,
             idx,
-            cells: generateCard(seedBase + idx * 7919),
+            cells: generateCard(seedBase + idx * 7919, cellsPerCard),
+            size: cellsPerCard,
             createdAt: Date.now(),
           })
           idx++
@@ -335,8 +337,21 @@ export default function Admin() {
                   }`}>{n}</button>
                 ))}
               </div>
+
+              <label className="text-xs text-gold uppercase tracking-widest block mb-2">Tamaño del cartón</label>
+              <div className="flex gap-2 mb-3">
+                {[
+                  { val: 12, label: '4 x 3 (12)' },
+                  { val: 9, label: '3 x 3 (9)' },
+                ].map(opt => (
+                  <button key={opt.val} onClick={() => setCellsPerCard(opt.val)} className={`flex-1 py-2 rounded text-sm font-semibold ${
+                    cellsPerCard === opt.val ? 'bg-gold text-darkBg' : 'border border-gold text-gold'
+                  }`}>{opt.label}</button>
+                ))}
+              </div>
+
               <button onClick={generateAllCards} disabled={busy} className="btn-gold w-full">
-                {busy ? 'Generando...' : `Generar y repartir ${cardsPerPlayer} cartón${cardsPerPlayer>1?'es':''}`}
+                {busy ? 'Generando...' : `Generar y repartir ${cardsPerPlayer} cartón${cardsPerPlayer>1?'es':''} ${cellsPerCard === 12 ? '4x3' : '3x3'}`}
               </button>
               <p className="text-[10px] text-goldDark mt-2 text-center">
                 Esto borra los cartones anteriores y crea nuevos.
