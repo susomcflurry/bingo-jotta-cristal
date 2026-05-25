@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  min-height: 100%;
+}
+
+body {
+  background: #fdfaf3;
+  color: #2c2416;
+  font-family: 'Montserrat', system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@layer components {
+  .btn-gold {
+    @apply bg-gold text-white font-semibold uppercase tracking-wider text-sm px-5 py-3 rounded-md hover:bg-goldDark transition disabled:bg-gray-300 disabled:cursor-not-allowed;
+  }
+  .btn-dark {
+    @apply bg-darkBg text-goldLight font-semibold uppercase tracking-wider text-sm px-5 py-3 rounded-md hover:bg-brown transition;
+  }
+  .btn-outline {
+    @apply border border-gold text-gold font-semibold uppercase tracking-wider text-sm px-5 py-3 rounded-md hover:bg-gold hover:text-white transition;
+  }
+  .card-elegant {
+    @apply bg-cream border-2 border-gold rounded-xl overflow-hidden;
+  }
+  .title-elegant {
+    @apply font-serif text-3xl font-semibold text-goldLight tracking-wide;
+  }
+}
